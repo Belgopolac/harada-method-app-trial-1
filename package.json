@@ -1,0 +1,43 @@
+{
+  "name": "harada-method-app",
+  "version": "1.0.0",
+  "description": "Mobile app for the Harada Method with calendar integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "lint": "eslint .",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-native": "^0.72.0",
+    "@react-navigation/native": "^6.1.0",
+    "@react-navigation/native-stack": "^6.9.0",
+    "react-native-screens": "^3.20.0",
+    "react-native-safe-area-context": "^4.7.0",
+    "react-native-calendars": "^1.1295.0",
+    "@react-native-community/datetimepicker": "^7.0.0",
+    "@react-native-async-storage/async-storage": "^1.18.0",
+    "react-native-permissions": "^3.8.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@babel/preset-env": "^7.20.0",
+    "@babel/preset-react": "^7.18.6",
+    "@babel/preset-typescript": "^7.18.6",
+    "@types/react": "^18.0.24",
+    "@types/react-test-renderer": "^18.0.0",
+    "@types/uuid": "^9.0.0",
+    "babel-jest": "^29.2.1",
+    "eslint": "^8.19.0",
+    "jest": "^29.2.1",
+    "metro-react-native-babel-preset": "^0.73.7",
+    "prettier": "^2.4.1",
+    "react-test-renderer": "^18.2.0",
+    "typescript": "^4.8.4"
+  },
+  "private": true
+}

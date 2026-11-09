@@ -1,0 +1,75 @@
+{
+  "name": "HaradaMethod",
+  "displayName": "Harada Method",
+  "version": "1.0.0",
+  "description": "Mobile app for the Harada Method with calendar integration",
+  "author": "Your Name",
+  "userInterfaceStyle": "automatic",
+  "orientation": "portrait",
+  "icon": "./assets/icon.png",
+  "splash": {
+    "image": "./assets/splash.png",
+    "resizeMode": "contain",
+    "backgroundColor": "#6200EE"
+  },
+  "notifications": {
+    "iosDisplayInForeground": true,
+    "androidMode": "default",
+    "androidCollapsedTitle": true
+  },
+  "android": {
+    "package": "com.harada.method",
+    "versionCode": 1,
+    "permissions": [
+      "android.permission.READ_CALENDAR",
+      "android.permission.WRITE_CALENDAR",
+      "android.permission.INTERNET",
+      "android.permission.VIBRATE",
+      "android.permission.RECEIVE_BOOT_COMPLETED"
+    ],
+    "config": {
+      "googleSignIn": {
+        "apiKey": null,
+        "certificateHash": null
+      }
+    },
+    "softwareKeyboardLayoutMode": "pan",
+    "statusBar": {
+      "backgroundColor": "#6200EE",
+      "barStyle": "light-content"
+    },
+    "fullscreen": false,
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#6200EE"
+    }
+  },
+  "ios": {
+    "bundleIdentifier": "com.harada.method",
+    "buildNumber": "1.0.0",
+    "infoPlist": {
+      "NSCalendarsUsageDescription": "Harada Method needs access to your calendar to add goal actions as events",
+      "NSPhotoLibraryUsageDescription": "Allow access to photos to set custom goal images",
+      "NSCameraUsageDescription": "Allow access to camera to take photos for your goals",
+      "NSMicrophoneUsageDescription": "Allow access to microphone for voice notes",
+      "NSLocationWhenInUseUsageDescription": "Allow location access for location-based reminders",
+      "UIBackgroundModes": ["fetch", "remote-notification"]
+    },
+    "supportsTablet": true,
+    "requiresFullScreen": true,
+    "isAccessible": true
+  },
+  "web": {
+    "favicon": "./assets/favicon.png"
+  },
+  "plugins": [
+    ["react-native-permissions", {
+      "iosPermissions": ["CALENDARS"],
+      "androidPermissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
+    }]
+  ],
+  "workflow": "managed"
+}
