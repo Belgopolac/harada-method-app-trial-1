@@ -42,7 +42,7 @@ export interface DailyRoutineItem {
   lastCompleted?: Date;
 }
 
-// Diary timestamps are ISO-8601 strings so they can be passed through navigation and storage safely.
+// Diary timestamps are ISO strings so they can be passed through navigation and storage safely.
 export interface DiaryEntry {
   id: string;
   date: string;
@@ -83,6 +83,6 @@ export type RootStackParamList = {
   Calendar: undefined;
   DailyRoutine: undefined;
   Diary: { date?: string } | undefined;
-  DiaryEditor: { entryId?: string; date?: string } | undefined;
+  DiaryEditor: { entryId?: string; date?: string; mood?: number } | undefined;
   Settings: undefined;
 };

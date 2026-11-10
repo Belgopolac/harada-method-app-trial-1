@@ -9,7 +9,7 @@ import { formatDate } from '../utils/harada';
 type DiaryNavigation = NativeStackNavigationProp<RootStackParamList, 'Diary'>;
 const { width } = Dimensions.get('window');
 
-const toDate = (value: string | Date | undefined): Date => {
+const asDate = (value: string | Date | undefined): Date => {
   const parsed = value instanceof Date ? value : new Date(value ?? Date.now());
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
@@ -26,16 +26,15 @@ const DiaryScreen = () => {
     setLoading(true);
     try {
       const stored = await getDiaryEntries();
-      const normalized: DiaryEntry[] = stored.map((item: any) => ({
+      setEntries(stored.map((item: any) => ({
         ...item,
-        date: toDate(item.date).toISOString(),
-        createdAt: toDate(item.createdAt).toISOString(),
-        updatedAt: toDate(item.updatedAt).toISOString(),
+        date: asDate(item.date).toISOString(),
+        createdAt: asDate(item.createdAt).toISOString(),
+        updatedAt: asDate(item.updatedAt).toISOString(),
         reflections: Array.isArray(item.reflections) ? item.reflections : [],
         tags: Array.isArray(item.tags) ? item.tags : [],
         mood: Number(item.mood) || 3,
-      }));
-      setEntries(normalized);
+      })));
     } catch (error) {
       console.error('Failed to load diary entries:', error);
       Alert.alert('Diary', 'Could not load diary entries.');
@@ -44,22 +43,15 @@ const DiaryScreen = () => {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    loadEntries();
-  }, [loadEntries]));
+  useFocusEffect(useCallback(() => { loadEntries(); }, [loadEntries]));
 
-  const entriesForDate = entries.filter(entry => localDateKey(toDate(entry.date)) === localDateKey(selectedDate));
+  const entriesForDate = entries.filter(entry => localDateKey(asDate(entry.date)) === localDateKey(selectedDate));
   const allTags = Array.from(new Set(entries.flatMap(entry => entry.tags))).sort();
   const visibleEntries = (filterTag ? entriesForDate.filter(entry => entry.tags.includes(filterTag)) : entriesForDate)
-    .slice().sort((a, b) => toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime());
+    .slice().sort((a, b) => asDate(b.createdAt).getTime() - asDate(a.createdAt).getTime());
+  const moodEmoji = (mood: number): string => ['😔', '😐', '😬', '😊', '😄'][mood - 1] || '😐';
+  const moodColor = (mood: number): string => ['#D32F2F', '#FF9800', '#FFC107', '#4CAF50', '#8BC34A'][mood - 1] || '#999';
 
-  const getMoodEmoji = (mood: number): string => ['😔', '😐', '😬', '😊', '😄'][mood - 1] || '😐';
-  const getMoodColor = (mood: number): string => ['#D32F2F', '#FF9800', '#FFC107', '#4CAF50', '#8BC34A'][mood - 1] || '#999';
-  const handleDateChange = (days: number) => setSelectedDate(current => {
-    const next = new Date(current);
-    next.setDate(next.getDate() + days);
-    return next;
-  });
   const openNewEntry = (mood?: number) => navigation.navigate('DiaryEditor', {
     date: selectedDate.toISOString(),
     ...(mood ? { mood } : {}),
@@ -77,6 +69,11 @@ const DiaryScreen = () => {
       }
     } },
   ]);
+  const moveDate = (days: number) => setSelectedDate(current => {
+    const next = new Date(current);
+    next.setDate(next.getDate() + days);
+    return next;
+  });
 
   if (loading) return <SafeAreaView style={styles.container}><View style={styles.loadingContainer}><Text style={styles.loadingText}>Loading...</Text></View></SafeAreaView>;
 
@@ -85,13 +82,13 @@ const DiaryScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}><Text style={styles.title}>Daily Diary</Text><Text style={styles.subtitle}>{formatDate(selectedDate)}</Text></View>
         <View style={styles.dateNavigator}>
-          <TouchableOpacity style={styles.dateButton} onPress={() => handleDateChange(-1)}><Text style={styles.dateButtonText}>← Previous</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.dateButton} onPress={() => moveDate(-1)}><Text style={styles.dateButtonText}>← Previous</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.dateButton, styles.todayButton]} onPress={() => setSelectedDate(new Date())}><Text style={[styles.dateButtonText, styles.todayButtonText]}>Today</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.dateButton} onPress={() => handleDateChange(1)}><Text style={styles.dateButtonText}>Next →</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.dateButton} onPress={() => moveDate(1)}><Text style={styles.dateButtonText}>Next →</Text></TouchableOpacity>
         </View>
         <View style={styles.moodSelector}>
           <Text style={styles.moodLabel}>How are you feeling today?</Text>
-          <View style={styles.moodOptions}>{[1, 2, 3, 4, 5].map(mood => <TouchableOpacity key={mood} style={[styles.moodOption, { backgroundColor: getMoodColor(mood) }]} onPress={() => openNewEntry(mood)}><Text style={styles.moodEmoji}>{getMoodEmoji(mood)}</Text></TouchableOpacity>)}</View>
+          <View style={styles.moodOptions}>{[1, 2, 3, 4, 5].map(mood => <TouchableOpacity key={mood} style={[styles.moodOption, { backgroundColor: moodColor(mood) }]} onPress={() => openNewEntry(mood)}><Text style={styles.moodEmoji}>{moodEmoji(mood)}</Text></TouchableOpacity>)}</View>
         </View>
         {allTags.length > 0 && <View style={styles.filterContainer}>
           <Text style={styles.filterLabel}>Filter by tag:</Text>
@@ -104,8 +101,8 @@ const DiaryScreen = () => {
           {visibleEntries.length === 0 ? <View style={styles.emptyContainer}><Text style={styles.emptyText}>No diary entries for this date</Text><Text style={styles.emptySubtext}>Tap the button below to add your first entry</Text></View> : visibleEntries.map(entry => (
             <View key={entry.id} style={styles.entryCard}>
               <View style={styles.entryHeader}>
-                <View style={styles.entryMood}><Text style={styles.entryMoodEmoji}>{getMoodEmoji(entry.mood)}</Text></View>
-                <View style={styles.entryMeta}><Text style={styles.entryTime}>{toDate(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{entry.tags.length > 0 && <View style={styles.entryTags}>{entry.tags.map((tag, index) => <Text key={`${entry.id}-${tag}-${index}`} style={styles.entryTag}>#{tag}</Text>)}</View>}</View>
+                <View style={styles.entryMood}><Text style={styles.entryMoodEmoji}>{moodEmoji(entry.mood)}</Text></View>
+                <View style={styles.entryMeta}><Text style={styles.entryTime}>{asDate(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>{entry.tags.length > 0 && <View style={styles.entryTags}>{entry.tags.map((tag, index) => <Text key={`${entry.id}-${tag}-${index}`} style={styles.entryTag}>#{tag}</Text>)}</View>}</View>
                 <TouchableOpacity style={styles.entryActions} onPress={() => handleDeleteEntry(entry.id)}><Text style={styles.entryActionText}>Delete</Text></TouchableOpacity>
               </View>
               <TouchableOpacity style={styles.entryContent} onPress={() => navigation.navigate('DiaryEditor', { entryId: entry.id })}><Text style={styles.entryText} numberOfLines={3}>{entry.content || 'No content'}</Text></TouchableOpacity>
