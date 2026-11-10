@@ -84,5 +84,6 @@ export type RootStackParamList = {
   DailyRoutine: undefined;
   Diary: { date?: string } | undefined;
   DiaryEditor: { entryId?: string; date?: string; mood?: number } | undefined;
+  Weather: undefined;
   Settings: undefined;
 };

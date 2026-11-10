@@ -10,6 +10,7 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import DailyRoutineScreen from './src/screens/DailyRoutineScreen';
 import DiaryScreen from './src/screens/DiaryScreen';
 import DiaryEditorScreen from './src/screens/DiaryEditorScreen';
+import WeatherScreen from './src/screens/WeatherScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -33,6 +34,7 @@ const App = () => (
       <Stack.Screen name="DailyRoutine" component={DailyRoutineScreen} options={{ title: 'Daily Routine' }} />
       <Stack.Screen name="Diary" component={DiaryScreen} options={{ title: 'Diary' }} />
       <Stack.Screen name="DiaryEditor" component={DiaryEditorScreen} options={{ title: 'Diary Entry' }} />
+      <Stack.Screen name="Weather" component={WeatherScreen} options={{ title: 'Weather' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Stack.Navigator>
   </NavigationContainer>
