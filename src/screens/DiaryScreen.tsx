@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Alert, Dimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, DiaryEntry } from '../types';
 import { getDiaryEntries, saveDiaryEntries } from '../utils/storage';
@@ -16,25 +16,25 @@ const DiaryScreen = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filterTag, setFilterTag] = useState<string | null>(null);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let mounted = true;
+    setLoading(true);
     getDiaryEntries().then((items: any[]) => {
       if (mounted) setEntries(items.map(item => ({ ...item, date: new Date(item.date), createdAt: new Date(item.createdAt), updatedAt: new Date(item.updatedAt) })));
     }).catch(error => console.error('Failed to load diary entries:', error)).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, []);
-  useEffect(() => { if (!loading) saveDiaryEntries(entries).catch(error => console.error('Failed to save diary entries:', error)); }, [entries, loading]);
+  }, []));
+
+  useFocusEffect(useCallback(() => {
+    if (!loading) saveDiaryEntries(entries).catch(error => console.error('Failed to save diary entries:', error));
+  }, [entries, loading]));
 
   const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const dayEntries = entries.filter(entry => dateKey(new Date(entry.date)) === dateKey(selectedDate));
   const tags = Array.from(new Set(entries.flatMap(entry => entry.tags))).sort();
   const visibleEntries = (filterTag ? dayEntries.filter(entry => entry.tags.includes(filterTag)) : dayEntries).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const moodEmoji = (mood: number) => ['😔', '😐', '😬', '😊', '😄'][mood - 1] || '😐';
-  const addEntry = (mood = 3) => {
-    const entry: DiaryEntry = { id: `${Date.now()}`, date: selectedDate, content: '', reflections: [], mood, tags: [], createdAt: new Date(), updatedAt: new Date() };
-    setEntries(current => [...current, entry]);
-    navigation.navigate('DiaryEditor', { entryId: entry.id });
-  };
+  const addEntry = (mood = 3) => navigation.navigate('DiaryEditor', { date: selectedDate });
   const deleteEntry = (entryId: string) => Alert.alert('Delete Entry', 'Delete this diary entry?', [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: () => setEntries(current => current.filter(entry => entry.id !== entryId)) },

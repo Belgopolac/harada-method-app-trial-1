@@ -38,7 +38,7 @@ export const removeItem = async (key: string): Promise<void> => {
 };
 
 export const getHaradaGrids = async (): Promise<any[]> => {
-  return getItem<any[]>(STORAGE_KEYS.HARADA_GRIDS) || [];
+  return (await getItem<any[]>(STORAGE_KEYS.HARADA_GRIDS)) ?? [];
 };
 
 export const saveHaradaGrids = async (grids: any[]): Promise<void> => {
@@ -54,7 +54,7 @@ export const setActiveGridId = async (gridId: string): Promise<void> => {
 };
 
 export const getDailyRoutines = async (): Promise<any[]> => {
-  return getItem<any[]>(STORAGE_KEYS.DAILY_ROUTINES) || [];
+  return (await getItem<any[]>(STORAGE_KEYS.DAILY_ROUTINES)) ?? [];
 };
 
 export const saveDailyRoutines = async (routines: any[]): Promise<void> => {
@@ -62,7 +62,7 @@ export const saveDailyRoutines = async (routines: any[]): Promise<void> => {
 };
 
 export const getDiaryEntries = async (): Promise<any[]> => {
-  return getItem<any[]>(STORAGE_KEYS.DIARY_ENTRIES) || [];
+  return (await getItem<any[]>(STORAGE_KEYS.DIARY_ENTRIES)) ?? [];
 };
 
 export const saveDiaryEntries = async (entries: any[]): Promise<void> => {
@@ -70,7 +70,7 @@ export const saveDiaryEntries = async (entries: any[]): Promise<void> => {
 };
 
 export const getCalendarEvents = async (): Promise<any[]> => {
-  return getItem<any[]>(STORAGE_KEYS.CALENDAR_EVENTS) || [];
+  return (await getItem<any[]>(STORAGE_KEYS.CALENDAR_EVENTS)) ?? [];
 };
 
 export const saveCalendarEvents = async (events: any[]): Promise<void> => {
@@ -78,7 +78,7 @@ export const saveCalendarEvents = async (events: any[]): Promise<void> => {
 };
 
 export const getSettings = async (): Promise<any> => {
-  return getItem<any>(STORAGE_KEYS.SETTINGS) || {};
+  return (await getItem<any>(STORAGE_KEYS.SETTINGS)) ?? {};
 };
 
 export const saveSettings = async (settings: any): Promise<void> => {

@@ -1,8 +1,12 @@
 package com.harada.method;
 
+import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
 import android.provider.CalendarContract;
 
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -17,7 +21,6 @@ import java.util.Calendar;
 import java.util.TimeZone;
 
 public class CalendarModule extends ReactContextBaseJavaModule {
-    private static final String TAG = "CalendarModule";
     private final ReactApplicationContext reactContext;
 
     public CalendarModule(ReactApplicationContext reactContext) {
@@ -26,111 +29,55 @@ public class CalendarModule extends ReactContextBaseJavaModule {
     }
 
     @Override
-    public String getName() {
-        return "CalendarModule";
+    public String getName() { return "CalendarModule"; }
+
+    private boolean hasCalendarPermissions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return reactContext.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+            && reactContext.checkSelfPermission(Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED;
     }
 
     @ReactMethod
     public void checkPermissions(Promise promise) {
-        try {
-            ContentResolver cr = reactContext.getContentResolver();
-            String[] projection = new String[] { CalendarContract.Calendars._ID };
-            Cursor cursor = cr.query(
-                CalendarContract.Calendars.CONTENT_URI,
-                projection,
-                null,
-                null,
-                null
-            );
-            boolean hasPermission = cursor != null && cursor.getCount() > 0;
-            if (cursor != null) {
-                cursor.close();
-            }
-            promise.resolve(hasPermission);
-        } catch (Exception e) {
-            promise.reject("PERMISSION_ERROR", "Failed to check permissions", e);
-        }
+        promise.resolve(hasCalendarPermissions());
     }
 
     @ReactMethod
-    public void requestPermissions(Promise promise) {
-        checkPermissions(promise);
-    }
-
-    @ReactMethod
-    public void addEvent(
-        String title,
-        double startDate,
-        double endDate,
-        String description,
-        Promise promise
-    ) {
+    public void addEvent(String title, double startDate, double endDate, String description, Promise promise) {
+        if (!hasCalendarPermissions()) { promise.reject("PERMISSION_DENIED", "Calendar permissions are required"); return; }
         try {
-            ContentResolver cr = reactContext.getContentResolver();
-            long calId = getDefaultCalendarId();
-
-            if (calId == -1) {
-                promise.reject("NO_CALENDAR", "No calendar found");
-                return;
-            }
-
+            ContentResolver resolver = reactContext.getContentResolver();
+            long calendarId = getDefaultCalendarId();
+            if (calendarId < 0) { promise.reject("NO_CALENDAR", "No writable primary calendar was found"); return; }
             ContentValues values = new ContentValues();
             values.put(CalendarContract.Events.TITLE, title);
             values.put(CalendarContract.Events.DESCRIPTION, description);
-            values.put(CalendarContract.Events.CALENDAR_ID, calId);
+            values.put(CalendarContract.Events.CALENDAR_ID, calendarId);
             values.put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
             values.put(CalendarContract.Events.DTSTART, (long) startDate);
             values.put(CalendarContract.Events.DTEND, (long) endDate);
-            values.put(CalendarContract.Events.HAS_ALARM, 1);
-
-            java.util.Calendar startCal = java.util.Calendar.getInstance();
-            startCal.setTimeInMillis((long) startDate);
-            values.put(CalendarContract.Events.DTSTART, startCal.getTimeInMillis());
-
-            java.util.Calendar endCal = java.util.Calendar.getInstance();
-            endCal.setTimeInMillis((long) endDate);
-            values.put(CalendarContract.Events.DTEND, endCal.getTimeInMillis());
-
-            cr.insert(CalendarContract.Events.CONTENT_URI, values);
-            promise.resolve(true);
+            Uri uri = resolver.insert(CalendarContract.Events.CONTENT_URI, values);
+            if (uri == null || uri.getLastPathSegment() == null) { promise.reject("ADD_ERROR", "Calendar provider did not return an event id"); return; }
+            promise.resolve(uri.getLastPathSegment());
         } catch (Exception e) {
             promise.reject("ADD_ERROR", "Failed to add event", e);
         }
     }
 
     @ReactMethod
-    public void updateEvent(
-        String eventId,
-        String title,
-        double startDate,
-        double endDate,
-        String description,
-        Promise promise
-    ) {
+    public void updateEvent(String eventId, String title, double startDate, double endDate, String description, Promise promise) {
+        if (!hasCalendarPermissions()) { promise.reject("PERMISSION_DENIED", "Calendar permissions are required"); return; }
         try {
-            ContentResolver cr = reactContext.getContentResolver();
-
             ContentValues values = new ContentValues();
             values.put(CalendarContract.Events.TITLE, title);
             values.put(CalendarContract.Events.DESCRIPTION, description);
             values.put(CalendarContract.Events.DTSTART, (long) startDate);
             values.put(CalendarContract.Events.DTEND, (long) endDate);
-
-            java.util.Calendar startCal = java.util.Calendar.getInstance();
-            startCal.setTimeInMillis((long) startDate);
-            values.put(CalendarContract.Events.DTSTART, startCal.getTimeInMillis());
-
-            java.util.Calendar endCal = java.util.Calendar.getInstance();
-            endCal.setTimeInMillis((long) endDate);
-            values.put(CalendarContract.Events.DTEND, endCal.getTimeInMillis());
-
-            int updated = cr.update(
-                CalendarContract.Events.CONTENT_URI,
-                values,
-                CalendarContract.Events._ID + "=?",
-                new String[] { eventId }
+            values.put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
+            int updated = reactContext.getContentResolver().update(
+                CalendarContract.Events.CONTENT_URI, values,
+                CalendarContract.Events._ID + "=?", new String[] { eventId }
             );
-
             promise.resolve(updated > 0);
         } catch (Exception e) {
             promise.reject("UPDATE_ERROR", "Failed to update event", e);
@@ -139,12 +86,11 @@ public class CalendarModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void deleteEvent(String eventId, Promise promise) {
+        if (!hasCalendarPermissions()) { promise.reject("PERMISSION_DENIED", "Calendar permissions are required"); return; }
         try {
-            ContentResolver cr = reactContext.getContentResolver();
-            int deleted = cr.delete(
+            int deleted = reactContext.getContentResolver().delete(
                 CalendarContract.Events.CONTENT_URI,
-                CalendarContract.Events._ID + "=?",
-                new String[] { eventId }
+                CalendarContract.Events._ID + "=?", new String[] { eventId }
             );
             promise.resolve(deleted > 0);
         } catch (Exception e) {
@@ -154,89 +100,54 @@ public class CalendarModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void getEventsForDate(double date, Promise promise) {
+        if (!hasCalendarPermissions()) { promise.reject("PERMISSION_DENIED", "Calendar permissions are required"); return; }
         try {
-            ContentResolver cr = reactContext.getContentResolver();
-            long calId = getDefaultCalendarId();
-
-            if (calId == -1) {
-                promise.resolve(Arguments.createArray());
-                return;
-            }
-
-            java.util.Calendar startCal = java.util.Calendar.getInstance();
-            startCal.setTimeInMillis((long) date);
-            startCal.set(Calendar.HOUR_OF_DAY, 0);
-            startCal.set(Calendar.MINUTE, 0);
-            startCal.set(Calendar.SECOND, 0);
-            startCal.set(Calendar.MILLISECOND, 0);
-
-            java.util.Calendar endCal = java.util.Calendar.getInstance();
-            endCal.setTimeInMillis((long) date);
-            endCal.set(Calendar.HOUR_OF_DAY, 23);
-            endCal.set(Calendar.MINUTE, 59);
-            endCal.set(Calendar.SECOND, 59);
-            endCal.set(Calendar.MILLISECOND, 999);
-
-            String selection = CalendarContract.Events.CALENDAR_ID + "=? AND " +
-                CalendarContract.Events.DTSTART + ">=? AND " +
-                CalendarContract.Events.DTSTART + "<=?";
-            String[] selectionArgs = new String[] {
-                String.valueOf(calId),
-                String.valueOf(startCal.getTimeInMillis()),
-                String.valueOf(endCal.getTimeInMillis())
-            };
-
-            Cursor cursor = cr.query(
+            Calendar start = Calendar.getInstance();
+            start.setTimeInMillis((long) date);
+            start.set(Calendar.HOUR_OF_DAY, 0); start.set(Calendar.MINUTE, 0); start.set(Calendar.SECOND, 0); start.set(Calendar.MILLISECOND, 0);
+            Calendar end = (Calendar) start.clone();
+            end.add(Calendar.DAY_OF_MONTH, 1);
+            long calendarId = getDefaultCalendarId();
+            if (calendarId < 0) { promise.resolve(Arguments.createArray()); return; }
+            String selection = CalendarContract.Events.CALENDAR_ID + "=? AND " + CalendarContract.Events.DTSTART + ">=? AND " + CalendarContract.Events.DTSTART + "<?";
+            String[] args = { String.valueOf(calendarId), String.valueOf(start.getTimeInMillis()), String.valueOf(end.getTimeInMillis()) };
+            Cursor cursor = reactContext.getContentResolver().query(
                 CalendarContract.Events.CONTENT_URI,
-                new String[] {
-                    CalendarContract.Events._ID,
-                    CalendarContract.Events.TITLE,
-                    CalendarContract.Events.DESCRIPTION,
-                    CalendarContract.Events.DTSTART,
-                    CalendarContract.Events.DTEND
-                },
-                selection,
-                selectionArgs,
-                CalendarContract.Events.DTSTART + " ASC"
+                new String[] { CalendarContract.Events._ID, CalendarContract.Events.TITLE, CalendarContract.Events.DESCRIPTION, CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND },
+                selection, args, CalendarContract.Events.DTSTART + " ASC"
             );
-
-            WritableArray results = Arguments.createArray();
-
+            WritableArray result = Arguments.createArray();
             if (cursor != null) {
-                while (cursor.moveToNext()) {
-                    WritableMap event = Arguments.createMap();
-                    event.putString("id", cursor.getString(0));
-                    event.putString("title", cursor.getString(1));
-                    event.putString("description", cursor.getString(2));
-                    event.putDouble("startDate", (double) cursor.getLong(3));
-                    event.putDouble("endDate", (double) cursor.getLong(4));
-                    event.putBoolean("isHaradaEvent",
-                        cursor.getString(2) != null && cursor.getString(2).contains("Harada Method"));
-                    results.pushMap(event);
-                }
-                cursor.close();
+                try {
+                    while (cursor.moveToNext()) {
+                        WritableMap event = Arguments.createMap();
+                        event.putString("id", cursor.getString(0));
+                        event.putString("title", cursor.getString(1));
+                        if (cursor.isNull(2)) event.putNull("description"); else event.putString("description", cursor.getString(2));
+                        event.putDouble("startDate", cursor.getLong(3));
+                        event.putDouble("endDate", cursor.getLong(4));
+                        event.putBoolean("isHaradaEvent", cursor.getString(2) != null && cursor.getString(2).contains("Harada Method"));
+                        result.pushMap(event);
+                    }
+                } finally { cursor.close(); }
             }
-
-            promise.resolve(results);
+            promise.resolve(result);
         } catch (Exception e) {
             promise.reject("QUERY_ERROR", "Failed to query events", e);
         }
     }
 
     private long getDefaultCalendarId() {
-        ContentResolver cr = reactContext.getContentResolver();
-        Cursor cursor = cr.query(
+        Cursor cursor = reactContext.getContentResolver().query(
             CalendarContract.Calendars.CONTENT_URI,
             new String[] { CalendarContract.Calendars._ID },
-            CalendarContract.Calendars.IS_PRIMARY + "=1",
-            null,
+            CalendarContract.Calendars.IS_PRIMARY + "=1 AND " + CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL + ">=?",
+            new String[] { String.valueOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) },
             null
         );
-
-        if (cursor != null && cursor.moveToFirst()) {
-            long calId = cursor.getLong(0);
-            cursor.close();
-            return calId;
+        if (cursor != null) {
+            try { if (cursor.moveToFirst()) return cursor.getLong(0); }
+            finally { cursor.close(); }
         }
         return -1;
     }

@@ -61,6 +61,7 @@ export interface CalendarEvent {
   description?: string;
   location?: string;
   isHaradaEvent: boolean;
+  nativeEventId?: string;
   haradaGridId?: string;
   haradaPillarId?: string;
   haradaCellId?: string;

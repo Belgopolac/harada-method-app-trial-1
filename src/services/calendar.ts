@@ -1,26 +1,105 @@
-import { Platform } from 'react-native';
+import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { CalendarEvent } from '../types';
-import { getCalendarEvents, saveCalendarEvents } from '../utils/storage';
+import { getCalendarEvents as readStoredEvents, saveCalendarEvents } from '../utils/storage';
 import { generateId } from '../utils/harada';
 
-export const addCalendarEvent = async (
-  event: Omit<CalendarEvent, 'id' | 'isHaradaEvent'>
-): Promise<CalendarEvent> => {
-  const newEvent: CalendarEvent = {
+interface NativeCalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: number;
+  endDate: number;
+  isHaradaEvent: boolean;
+}
+
+interface NativeCalendarModule {
+  checkPermissions(): Promise<boolean>;
+  addEvent(title: string, startDate: number, endDate: number, description: string): Promise<string>;
+  updateEvent(eventId: string, title: string, startDate: number, endDate: number, description: string): Promise<boolean>;
+  deleteEvent(eventId: string): Promise<boolean>;
+  getEventsForDate(date: number): Promise<NativeCalendarEvent[]>;
+}
+
+const NativeCalendar = NativeModules.CalendarModule as NativeCalendarModule | undefined;
+const READ_CALENDAR = PermissionsAndroid.PERMISSIONS.READ_CALENDAR;
+const WRITE_CALENDAR = PermissionsAndroid.PERMISSIONS.WRITE_CALENDAR;
+
+const asDate = (value: Date | string | number): Date => value instanceof Date ? value : new Date(value);
+
+export const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
+  const events = await readStoredEvents();
+  return events.map(event => ({
     ...event,
-    id: generateId(),
-    isHaradaEvent: true,
-  };
-  const events = await getCalendarEvents();
-  events.push(newEvent);
-  await saveCalendarEvents(events);
-  if (Platform.OS !== 'web') {
+    startDate: asDate(event.startDate),
+    endDate: asDate(event.endDate),
+  }));
+};
+
+export const checkCalendarPermissions = async (): Promise<{ granted: boolean; canRequest: boolean }> => {
+  if (Platform.OS !== 'android' || !NativeCalendar) return { granted: false, canRequest: false };
+  try {
+    const [readGranted, writeGranted] = await Promise.all([
+      PermissionsAndroid.check(READ_CALENDAR),
+      PermissionsAndroid.check(WRITE_CALENDAR),
+    ]);
+    return { granted: readGranted && writeGranted, canRequest: true };
+  } catch (error) {
+    console.warn('Could not check calendar permissions:', error);
+    return { granted: false, canRequest: true };
+  }
+};
+
+export const requestCalendarPermissions = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android' || !NativeCalendar) return false;
+  const current = await checkCalendarPermissions();
+  if (current.granted) return true;
+  const results = await PermissionsAndroid.requestMultiple([READ_CALENDAR, WRITE_CALENDAR]);
+  const granted = results[READ_CALENDAR] === PermissionsAndroid.RESULTS.GRANTED &&
+    results[WRITE_CALENDAR] === PermissionsAndroid.RESULTS.GRANTED;
+  return granted && NativeCalendar.checkPermissions();
+};
+
+export const addToNativeCalendar = async (event: CalendarEvent): Promise<string> => {
+  if (!NativeCalendar) throw new Error('Native calendar module is unavailable on this platform.');
+  const permissions = await checkCalendarPermissions();
+  if (!permissions.granted) throw new Error('Calendar permissions have not been granted.');
+  return NativeCalendar.addEvent(
+    event.title,
+    asDate(event.startDate).getTime(),
+    asDate(event.endDate).getTime(),
+    event.description ?? ''
+  );
+};
+
+export const updateNativeCalendarEvent = async (event: CalendarEvent): Promise<boolean> => {
+  if (!NativeCalendar || !event.nativeEventId) return false;
+  return NativeCalendar.updateEvent(
+    event.nativeEventId,
+    event.title,
+    asDate(event.startDate).getTime(),
+    asDate(event.endDate).getTime(),
+    event.description ?? ''
+  );
+};
+
+export const deleteFromNativeCalendar = async (nativeEventId: string): Promise<boolean> => {
+  if (!NativeCalendar) return false;
+  return NativeCalendar.deleteEvent(nativeEventId);
+};
+
+export const addCalendarEvent = async (
+  event: Omit<CalendarEvent, 'id' | 'isHaradaEvent' | 'nativeEventId'>
+): Promise<CalendarEvent> => {
+  const newEvent: CalendarEvent = { ...event, id: generateId(), isHaradaEvent: true };
+  if (Platform.OS === 'android' && (await checkCalendarPermissions()).granted) {
     try {
-      await addToNativeCalendar(newEvent);
+      newEvent.nativeEventId = await addToNativeCalendar(newEvent);
     } catch (error) {
-      console.log('Could not add to native calendar:', error);
+      console.warn('Saved event locally, but could not add it to the device calendar:', error);
     }
   }
+  const events = await getCalendarEvents();
+  await saveCalendarEvents([...events, newEvent]);
   return newEvent;
 };
 
@@ -29,91 +108,65 @@ export const updateCalendarEvent = async (
   updates: Partial<CalendarEvent>
 ): Promise<CalendarEvent | null> => {
   const events = await getCalendarEvents();
-  const index = events.findIndex(e => e.id === eventId);
-  if (index === -1) return null;
+  const index = events.findIndex(event => event.id === eventId);
+  if (index < 0) return null;
   const updatedEvent = { ...events[index], ...updates };
-  events[index] = updatedEvent;
-  await saveCalendarEvents(events);
-  if (Platform.OS !== 'web') {
+  if (updatedEvent.nativeEventId) {
     try {
       await updateNativeCalendarEvent(updatedEvent);
     } catch (error) {
-      console.log('Could not update native calendar:', error);
+      console.warn('Updated local event, but could not update device calendar:', error);
     }
   }
+  events[index] = updatedEvent;
+  await saveCalendarEvents(events);
   return updatedEvent;
 };
 
 export const deleteCalendarEvent = async (eventId: string): Promise<boolean> => {
   const events = await getCalendarEvents();
-  const filteredEvents = events.filter(e => e.id !== eventId);
-  await saveCalendarEvents(filteredEvents);
-  if (Platform.OS !== 'web') {
+  const event = events.find(item => item.id === eventId);
+  if (!event) return false;
+  if (event.nativeEventId) {
     try {
-      await deleteFromNativeCalendar(eventId);
+      await deleteFromNativeCalendar(event.nativeEventId);
     } catch (error) {
-      console.log('Could not delete from native calendar:', error);
+      console.warn('Deleted local event, but could not delete device calendar event:', error);
     }
   }
+  await saveCalendarEvents(events.filter(item => item.id !== eventId));
   return true;
 };
 
 export const getEventsForDate = async (date: Date): Promise<CalendarEvent[]> => {
+  const dateKey = asDate(date).toDateString();
   const events = await getCalendarEvents();
-  const dateString = date.toISOString().split('T')[0];
-  return events.filter(event => {
-    const eventDateString = new Date(event.startDate).toISOString().split('T')[0];
-    return eventDateString === dateString;
-  });
+  return events.filter(event => asDate(event.startDate).toDateString() === dateKey);
 };
 
-export const getEventsForDateRange = async (
-  startDate: Date,
-  endDate: Date
-): Promise<CalendarEvent[]> => {
+export const getEventsForDateRange = async (startDate: Date, endDate: Date): Promise<CalendarEvent[]> => {
   const events = await getCalendarEvents();
   return events.filter(event => {
-    const eventStart = new Date(event.startDate);
+    const eventStart = asDate(event.startDate);
     return eventStart >= startDate && eventStart <= endDate;
   });
 };
 
-export const addToNativeCalendar = async (event: CalendarEvent): Promise<string> => {
-  console.log('Adding to native calendar:', event);
-  return event.id;
-};
-
-export const updateNativeCalendarEvent = async (event: CalendarEvent): Promise<boolean> => {
-  console.log('Updating native calendar event:', event);
-  return true;
-};
-
-export const deleteFromNativeCalendar = async (eventId: string): Promise<boolean> => {
-  console.log('Deleting from native calendar:', eventId);
-  return true;
-};
-
-export const checkCalendarPermissions = async (): Promise<{ granted: boolean; canRequest: boolean }> => {
-  return { granted: false, canRequest: true };
-};
-
-export const requestCalendarPermissions = async (): Promise<boolean> => {
-  console.log('Requesting calendar permissions...');
-  return false;
-};
-
 export const syncWithNativeCalendar = async (): Promise<number> => {
-  const localEvents = await getCalendarEvents();
-  const haradaEvents = localEvents.filter(e => e.isHaradaEvent);
+  if (Platform.OS !== 'android' || !NativeCalendar) return 0;
+  if (!(await checkCalendarPermissions()).granted) throw new Error('Calendar permissions have not been granted.');
+  const events = await getCalendarEvents();
   let syncedCount = 0;
-  for (const event of haradaEvents) {
+  for (const event of events) {
+    if (event.nativeEventId) continue;
     try {
-      await addToNativeCalendar(event);
+      event.nativeEventId = await addToNativeCalendar(event);
       syncedCount++;
     } catch (error) {
-      console.log('Failed to sync event:', event.id, error);
+      console.warn(`Could not sync event ${event.id}:`, error);
     }
   }
+  await saveCalendarEvents(events);
   return syncedCount;
 };
 
@@ -121,32 +174,34 @@ export const createEventFromHaradaAction = (
   title: string,
   description: string,
   startDate: Date,
-  durationMinutes: number = 30,
+  durationMinutes = 30,
   haradaGridId?: string,
   haradaPillarId?: string,
   haradaCellId?: string
-): Omit<CalendarEvent, 'id' | 'isHaradaEvent'> => {
-  const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
-  return { title, startDate, endDate, description, haradaGridId, haradaPillarId, haradaCellId };
-};
+): Omit<CalendarEvent, 'id' | 'isHaradaEvent' | 'nativeEventId'> => ({
+  title,
+  startDate,
+  endDate: new Date(startDate.getTime() + durationMinutes * 60000),
+  description,
+  haradaGridId,
+  haradaPillarId,
+  haradaCellId,
+});
 
-export const scheduleHaradaAction = async (
+export const scheduleHaradaAction = (
   title: string,
   description: string,
   date: Date,
-  durationMinutes: number = 30,
+  durationMinutes = 30,
   haradaGridId?: string,
   haradaPillarId?: string,
   haradaCellId?: string
-): Promise<CalendarEvent> => {
-  const event = createEventFromHaradaAction(
-    title, description, date, durationMinutes,
-    haradaGridId, haradaPillarId, haradaCellId
-  );
-  return addCalendarEvent(event);
-};
+): Promise<CalendarEvent> => addCalendarEvent(
+  createEventFromHaradaAction(title, description, date, durationMinutes, haradaGridId, haradaPillarId, haradaCellId)
+);
 
 export default {
+  getCalendarEvents,
   addCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
