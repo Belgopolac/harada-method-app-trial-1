@@ -1,0 +1,28 @@
+apply plugin: 'com.android.application'
+apply plugin: 'com.facebook.react'
+
+project.ext.react = [enableHermes: true]
+
+android {
+    namespace 'com.harada.method'
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId 'com.harada.method'
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName '1.0.0'
+    }
+}
+
+dependencies {
+    implementation('com.facebook.react:react-android')
+    if (project.ext.react.enableHermes) {
+        implementation('com.facebook.react:hermes-android')
+    } else {
+        implementation('org.webkit:android-jsc:+')
+    }
+}
+
+apply from: file('../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle'); applyNativeModulesAppBuildGradle(project)
