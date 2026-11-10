@@ -65,34 +65,38 @@ export const removeItem = async (key: string): Promise<void> => {
 
 export const getHaradaGrids = async (): Promise<any[]> => (await getItem<any[]>(STORAGE_KEYS.HARADA_GRIDS)) ?? [];
 export const saveHaradaGrids = async (grids: any[]): Promise<void> => setItem(STORAGE_KEYS.HARADA_GRIDS, grids);
-
 export const getActiveGridId = async (): Promise<string | null> => getItem<string>(STORAGE_KEYS.ACTIVE_GRID_ID);
-export const setActiveGridId = async (gridId: string | null): Promise<void> => {
-  if (gridId === null) return removeItem(STORAGE_KEYS.ACTIVE_GRID_ID);
-  return setItem(STORAGE_KEYS.ACTIVE_GRID_ID, gridId);
-};
-
+export const setActiveGridId = async (gridId: string | null): Promise<void> => gridId === null ? removeItem(STORAGE_KEYS.ACTIVE_GRID_ID) : setItem(STORAGE_KEYS.ACTIVE_GRID_ID, gridId);
 export const getDailyRoutines = async (): Promise<any[]> => (await getItem<any[]>(STORAGE_KEYS.DAILY_ROUTINES)) ?? [];
 export const saveDailyRoutines = async (routines: any[]): Promise<void> => setItem(STORAGE_KEYS.DAILY_ROUTINES, routines);
-
 export const getCalendarEvents = async (): Promise<any[]> => (await getItem<any[]>(STORAGE_KEYS.CALENDAR_EVENTS)) ?? [];
 export const saveCalendarEvents = async (events: any[]): Promise<void> => setItem(STORAGE_KEYS.CALENDAR_EVENTS, events);
 
-export const getDiaryEntries = async (): Promise<any[]> => (await getItem<any[]>(STORAGE_KEYS.DIARY_ENTRIES)) ?? [];
-export const saveDiaryEntries = async (entries: any[]): Promise<void> => setItem(STORAGE_KEYS.DIARY_ENTRIES, entries);
-
-const DEFAULT_SETTINGS = {
-  notificationsEnabled: true,
-  darkMode: false,
-  autoSyncCalendar: false,
-  showTutorial: true,
+// Diary dates intentionally remain ISO strings; navigation and the DiaryEntry type use strings.
+export const getDiaryEntries = async (): Promise<any[]> => {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.DIARY_ENTRIES);
+    if (data === null) return [];
+    const entries = JSON.parse(data);
+    return Array.isArray(entries) ? entries : [];
+  } catch (error) {
+    console.error('Failed to load diary entries:', error);
+    throw error;
+  }
+};
+export const saveDiaryEntries = async (entries: any[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.DIARY_ENTRIES, JSON.stringify(serializeForStorage(entries)));
+  } catch (error) {
+    console.error('Failed to save diary entries:', error);
+    throw error;
+  }
 };
 
+const DEFAULT_SETTINGS = { notificationsEnabled: true, darkMode: false, autoSyncCalendar: false, showTutorial: true };
 export const getSettings = async (): Promise<any> => {
   const current = await getItem<any>(STORAGE_KEYS.SETTINGS);
   if (current !== null) return { ...DEFAULT_SETTINGS, ...current };
-
-  // Migrate settings saved by earlier versions under @settings.
   const legacy = await getItem<any>(STORAGE_KEYS.LEGACY_SETTINGS);
   if (legacy !== null) {
     await setItem(STORAGE_KEYS.SETTINGS, legacy);
@@ -101,7 +105,6 @@ export const getSettings = async (): Promise<any> => {
   }
   return { ...DEFAULT_SETTINGS };
 };
-
 export const saveSettings = async (settings: any): Promise<void> => setItem(STORAGE_KEYS.SETTINGS, settings);
 
 export const clearAllData = async (): Promise<void> => {
